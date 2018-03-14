@@ -1,0 +1,59 @@
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+
+## Monasca
+###monasca_common_git_repo: "https://git.openstack.org/openstack/monasca-common.git"
+###monasca_api_git_repo: "https://git.openstack.org/openstack/monasca-api.git"
+###monasca_persister_git_repo: "https://git.openstack.org/openstack/monasca-persister.git"
+###monasca_notification_git_repo: "https://git.openstack.org/openstack/monasca-notification.git"
+###monasca_thresh_git_repo: "https://git.openstack.org/openstack/monasca-thresh.git"
+###monasca_ui_git_repo: "https://git.openstack.org/openstack/monasca-ui.git"
+###monasca_client_git_repo: "https://git.openstack.org/openstack/python-monascaclient.git"
+###monasca_agent_git_repo: "https://git.openstack.org/openstack/monasca-agent.git"
+###monasca_git_branch: "stable/mitaka"
+
+## [Marouane Mechteri]: proxy parameters
+http_proxy: 
+https_proxy: 
+proxy_host: 
+proxy_port: 
+proxy_protocol: 
+
+# Monasca notification
+notification_address: root@localhost
+notification_name: 'Default Email'
+notification_type: EMAIL
+
+## Keystone
+# admin credentials
+os_username: "admin"
+os_password: "CogNetPass"
+os_project_name: "admin"
+
+# monasca-user credentials
+os_mon_username: "monasca"
+os_mon_password: "password"
+os_mon_project_name: "monasca"
+
+# monasca-agent credentials
+os_mon_agent_username: "monasca-agent"
+os_mon_agent_password: "password"
+
+## Horizon
+# dashboard directory
+horizon_dir: "/opt/stack/horizon"
+
+## Database
+mysql_root_pass: "CogNetPass"
+
+## NTP
+ntp_servers:
+  - time.lon.rackspace.com
+agent_ntp_servers:
+    - "{{ monasca_ip_address }}"
+
+# DevStack vars
+devstack_service_token: CogNetToken
+devstack_password: CogNetPass
+

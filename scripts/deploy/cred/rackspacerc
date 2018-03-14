@@ -1,0 +1,9 @@
+OS_AUTH_URL=https://identity.api.rackspacecloud.com/v2.0/
+OS_USERNAME=username@domain
+OS_TENANT_NAME=tenant_name
+OS_AUTH_SYSTEM=rackspace
+OS_PASSWORD=api_key
+OS_REGION_NAME=Your_region
+OS_NO_CACHE=1
+export OS_AUTH_URL OS_USERNAME OS_TENANT_NAME OS_AUTH_SYSTEM OS_PASSWORD OS_REGION_NAME OS_NO_CACHE
+

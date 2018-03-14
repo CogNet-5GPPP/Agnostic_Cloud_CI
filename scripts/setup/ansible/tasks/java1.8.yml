@@ -1,0 +1,55 @@
+---
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Add Oracle Java webupd PPA
+  sudo: yes
+  apt_repository:
+    repo: "ppa:webupd8team/java"
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Add Oracle Java webupd PPA
+  sudo: yes
+  apt_repository:
+    repo: "ppa:webupd8team/java"
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+
+- name: Accept Java licence
+  sudo: yes
+  debconf:
+    name: "oracle-java8-installer"
+    question: shared/accepted-oracle-license-v1-1
+    vtype: select
+    value: "true"
+
+# [Marouane Mechteri]
+#- name: Patch Java installer
+#  shell: "{{ item }}"
+#  args:
+#    chdir: "/var/lib/dpkg/info"
+#  become: yes
+#  with_items:
+#    - sed -i 's|JAVA_VERSION=8u144|JAVA_VERSION=8u152|' oracle-java8-installer.*
+#    - sed -i 's|PARTNER_URL=http://download.oracle.com/otn-pub/java/jdk/8u144-b01/090f390dda5b47b9b721c7dfaa008135/|PARTNER_URL=http://download.oracle.com/otn-pub/java/jdk/8u152-b16/aa0333dd3019491ca4f6ddbe78cdb6d0/|' oracle-java8-installer.*
+#    - sed -i 's|SHA256SUM_TGZ="e8a341ce566f32c3d06f6d0f0eeea9a0f434f538d22af949ae58bc86f2eeaae4"|SHA256SUM_TGZ="218b3b340c3f6d05d940b817d0270dfe0cfd657a636bad074dcabe0c111961bf"|' oracle-java8-installer.*
+#    - sed -i 's|J_DIR=jdk1.8.0_144|J_DIR=jdk1.8.0_152|' oracle-java8-installer.*
+
+
+- name: Install Oracle Java 8
+  apt:
+    name: "{{ item }}"
+    update_cache: yes
+    state: latest
+    force: yes
+  with_items:
+    - "oracle-java8-installer"
+    - "ca-certificates"
+    - "oracle-java8-set-default"

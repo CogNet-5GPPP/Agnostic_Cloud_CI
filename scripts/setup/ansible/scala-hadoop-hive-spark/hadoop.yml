@@ -1,0 +1,84 @@
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+
+########## playbook to install hadoop, hive and spark in master and slaves ########
+- name: spark installation playbook
+  hosts: spark_master, spark_slaves
+  remote_user: "{{ansible_user}}"
+  sudo: yes
+  vars_files:
+  - ../group_vars/spark_master.yml
+  #vars:
+    ## [Marouane Mechteri]:
+    # rename hadoop 2.6.4 to 2.6.5
+    # defining hadoop_folder_name in the group_vars
+    #hadoop_folder_name: "hadoop-2.6.5"
+    
+  tasks:
+
+  ####### unzipping all  compressed file into /usr/local directory####
+  
+  - name: unarchiving the hadoop zip file
+    unarchive: src=../hadoop.tar.gz dest=./ copy=yes mode=0777
+  
+  - name: remove hadoop directory if exists
+    file: name=/usr/local/hadoop state=absent
+
+  - name: rename directory
+    command: creates="/usr/local/hadoop" mv ./{{hadoop_folder_name}} /usr/local/hadoop
+
+    
+  ############## setting enviroment variables for hadoop#####
+  - name: configuring hadoop (env variables)
+    lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export HADOOP_HOME=/usr/local/hadoop'  line='export HADOOP_HOME=/usr/local/hadoop '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export HADOOP_MAPRED_HOME=$HADOOP_HOME'  line='export HADOOP_MAPRED_HOME=$HADOOP_HOME '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export HADOOP_COMMON_HOME=$HADOOP_HOME'  line='export HADOOP_COMMON_HOME=$HADOOP_HOME '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export HADOOP_HDFS_HOME=$HADOOP_HOME'  line='export HADOOP_HDFS_HOME=$HADOOP_HOME '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export YARN_HOME=$HADOOP_HOME'  line='export YARN_HOME=$HADOOP_HOME '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native'  line='export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export PATH=$PATH:$HADOOP_HOME/sbin:$HADOOP_HOME/bin'  line='export PATH=$PATH:$HADOOP_HOME/sbin:$HADOOP_HOME/bin '
+  - lineinfile: dest=/usr/local/hadoop/etc/hadoop/hadoop-env.sh regexp='export JAVA_HOME=/usr/lib/jvm/java-8-oracle'  line='export JAVA_HOME=/usr/lib/jvm/java-8-oracle '
+   
+  
+  - name: ssh key generation for access
+    user: name="{{ansible_user}}" generate_ssh_key=yes
+  - shell: cat /home/{{ ansible_ssh_user }}/.ssh/id_rsa.pub >> /home/{{ ansible_ssh_user }}/.ssh/authorized_keys
+  
+  ################################## configuring files for hadoop##################################
+  - name: core-site.xml
+    lineinfile: dest=/usr/local/hadoop/etc/hadoop/core-site.xml regexp='<configuration>'  line='<configuration>\n                    <property>\n                          <name>fs.default.name</name>\n                          <value>hdfs://localhost:9000</value>\n                    </property>\n'
+  
+  - name: make directory 
+    file: name=/usr/local/hadoop_tmp/hdfs/namenode state=directory
+  - file: name=/usr/local/hadoop_tmp/hdfs/datanode state=directory
+  
+  - name: providing ownership of a folder
+    command: chown {{ ansible_ssh_user }}  -R /usr/local/hadoop_tmp/
+  
+  
+  - name: hdfs-site.xml
+    lineinfile: dest=/usr/local/hadoop/etc/hadoop/hdfs-site.xml regexp='<configuration>'  line='<configuration>\n<property>\n      <name>dfs.replication</name>\n      <value>1</value>\n </property>\n <property>\n      <name>dfs.namenode.name.dir</name>\n      <value>file:/usr/local/hadoop_tmp/hdfs/namenode</value>\n </property>\n <property>\n      <name>dfs.datanode.data.dir</name>\n      <value>file:/usr/local/hadoop_tmp/hdfs/datanode</value>\n </property>'
+   
+  - name: yarn-site.xml
+    lineinfile: dest=/usr/local/hadoop/etc/hadoop/yarn-site.xml regexp='<configuration>'  line='<configuration>\n<property>\n      <name>yarn.nodemanager.aux-services</name>\n      <value>mapreduce_shuffle</value>\n</property>\n<property>\n      <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>\n      <value>org.apache.hadoop.mapred.ShuffleHandler</value>\n</property>\n'
+  
+  - name: copying file
+    command: cp /usr/local/hadoop/etc/hadoop/mapred-site.xml.template /usr/local/hadoop/etc/hadoop/mapred-site.xml
+  
+  - name: mapred-site.xml
+    lineinfile: dest=/usr/local/hadoop/etc/hadoop/mapred-site.xml regexp='<configuration>'  line='<configuration>\n<property>\n      <name>yarn.nodemanager.aux-services</name>\n      <value>mapreduce_shuffle</value>\n</property>\n<property>\n      \n<name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>\n      <value>org.apache.hadoop.mapred.ShuffleHandler</value>\n</property>'
+  
+  
+  ############## sourcing bashrc #####################
+  - name: source bashrc
+    sudo: no
+    shell: . /home/{{ ansible_ssh_user }}/.bashrc && source /home/{{ ansible_ssh_user }}/.bashrc
+    args:
+      executable: /bin/bash
+
+  ###### disable Ipv6###############################
+  - name: disable Ipv6
+    lineinfile: dest=/etc/sysctl.conf regexp='net.ipv6.conf.all.disable_ipv6 = 1' line='net.ipv6.conf.all.disable_ipv6 = 1'
+  - lineinfile: dest=/etc/sysctl.conf regexp='net.ipv6.conf.default.disable_ipv6 = 1' line='net.ipv6.conf.default.disable_ipv6 = 1'
+  - lineinfile: dest=/etc/sysctl.conf regexp='net.ipv6.conf.lo.disable_ipv6 = 1' line='net.ipv6.conf.lo.disable_ipv6 = 1'

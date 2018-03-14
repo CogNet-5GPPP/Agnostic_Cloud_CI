@@ -1,0 +1,26 @@
+---
+######## pre installation playbook (downloading all compressed files locally)##########
+- name: playbook fow downloading the compressed spark hive and hadoop
+  hosts: localhost
+  #sudo: true
+  vars_files: 
+  - ../group_vars/spark_master.yml 
+#  vars:
+    #spark_link: "http://www.eu.apache.org/dist/spark/spark-1.6.1/"
+    #spark_zip_file_name: "spark-1.6.1-bin-hadoop2.6.tgz"
+    #hadoop_link: "http://www-eu.apache.org/dist/hadoop/common/hadoop-2.6.4/"
+    #hadoop_zip_file_name: "hadoop-2.6.4.tar.gz"
+    #hive_link: "http://www-eu.apache.org/dist/hive/hive-2.0.0/"
+    #hive_zip_file_name: "apache-hive-2.0.0-bin.tar.gz"
+    #derby_link: "http://archive.apache.org/dist/db/derby/db-derby-10.10.2.0/"
+    #derby_zip_file_name: "db-derby-10.10.2.0-bin.tar.gz"
+
+  tasks:
+    - name: download spark tgz file
+      get_url: url={{spark_link}}{{spark_zip_file_name}} dest=./spark.tgz mode=0777
+    - name: download hadoop gz file
+      get_url: url={{hadoop_link}}{{hadoop_zip_file_name}} dest=./hadoop.tar.gz mode=0777
+    - name: download hive gz file
+      get_url: url={{hive_link}}{{hive_zip_file_name}} dest=./hive.tar.gz mode=0777
+    - name: download derby gz file
+      get_url: url={{derby_link}}{{derby_zip_file_name}} dest=./derby.tar.gz mode=0777

@@ -1,0 +1,87 @@
+---
+# Author(s)	: Joe Tynan (WIT), Siblee Islam (WIT).
+# Description	: 
+# Documentation : 
+# Funded by	: EU 5G-PPP Cognet project http://www.cognet.5g-ppp.eu/ (https://5g-ppp.eu/cognet/)
+# Maintainer	: Joe Tynan (jtynan@tssg.org), Waterford Institute of Technology
+# Copyright	: Copyright 2016 Waterford Institute of Technology © 
+# License	: Apache 2.0 ( http://www.apache.org/licenses/LICENSE-2.0.txt)
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Devstack Controller playbook
+  hosts: oscon
+  remote_user: "{{ansible_user}}"
+  sudo: true
+  tasks:
+
+  ## [Marouane Mechteri]: deleted
+  #- name: Add repo trusty 
+  #  apt_repository: repo='deb http://nova.clouds.archive.ubuntu.com/ubuntu/ trusty universe' state=present
+  #- name: Add repo trusty-updates
+  #  apt_repository: repo='deb http://nova.clouds.archive.ubuntu.com/ubuntu/ trusty-updates universe' state=present
+  
+  - name: apt-get update server
+    apt: name=git update_cache=yes
+
+- name: Devstack installing OpenStack
+  hosts: oscon
+  remote_user: "{{ansible_user}}" 
+  tasks:
+
+  - name: clone devstack
+    sudo_user: "{{ansible_user}}"
+    git: repo=https://git.openstack.org/openstack-dev/devstack
+         dest=~/devstack
+         version={{ branch }}
+    ## [Marouane Mechteri]: adding proxy and condition
+    when: not(http_proxy is none)
+    environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+  - name: clone devstack
+    sudo_user: "{{ansible_user}}"
+    git: repo=https://git.openstack.org/openstack-dev/devstack
+         dest=~/devstack
+         version={{ branch }}
+    ## [Marouane Mechteri]: adding condition
+    when: http_proxy is none
+
+  - name: devstack local.conf
+    template: src=templates/devstack-cognet-controller-local.conf
+              dest=~/devstack/local.conf
+
+  ## [Marouane Mechteri]: configuring proxy for git
+  - name: configure http proxy for git
+    command: git config --global http.proxy {{http_proxy}}
+    when: not(http_proxy is none)
+
+
+  - name: run stack.sh
+    command: chdir=~/devstack ./stack.sh
+    ## [Marouane Mechteri]: adding proxy and condition
+    when: not(http_proxy is none)
+    environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+  - name: run stack.sh
+    command: chdir=~/devstack ./stack.sh
+    ## [Marouane Mechteri]: adding condition
+    when: http_proxy is none

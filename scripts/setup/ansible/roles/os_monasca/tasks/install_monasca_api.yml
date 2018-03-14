@@ -1,0 +1,185 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Install monasca-api required pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    virtualenv: "/opt/venvs/monasca-api"
+  with_items:
+    - "gunicorn"
+    - "influxdb==2.8.0"
+    - "PyMySQL"
+    - "six>=1.10.0"
+    - "eventlet==0.18.2"
+    - "file://{{ monasca_common_tarball.stdout }}"
+    - "file://{{ monasca_statsd_tarball.stdout }}"
+  tags:
+    - monasca-api-pip-packages
+    - monasca-install-api
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Install monasca-api required pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    virtualenv: "/opt/venvs/monasca-api"
+  with_items:
+    - "gunicorn"
+    - "influxdb==2.8.0"
+    - "PyMySQL"
+    - "six>=1.10.0"
+    - "eventlet==0.18.2"
+    - "file://{{ monasca_common_tarball.stdout }}"
+    - "file://{{ monasca_statsd_tarball.stdout }}"
+  tags:
+    - monasca-api-pip-packages
+    - monasca-install-api
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+
+- name: Create monasca-api tarball
+  command: "/opt/venvs/monasca-api/bin/python setup.py sdist"
+  args:
+    chdir: "/opt/cloned-repos/monasca-api"
+  register: api_result
+  changed_when: "api_result.rc == 0"
+  tags:
+    - monasca-api-tarball
+    - monasca-install-api
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+
+- name: Create monasca-api tarball
+  command: "/opt/venvs/monasca-api/bin/python setup.py sdist"
+  args:
+    chdir: "/opt/cloned-repos/monasca-api"
+  register: api_result
+  changed_when: "api_result.rc == 0"
+  tags:
+    - monasca-api-tarball
+    - monasca-install-api
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+  
+- name: Get tarball file name
+  shell: "ls -td /opt/cloned-repos/monasca-api/dist/monasca-api-*.tar.gz | head -1"
+  register: tarball
+  changed_when: false
+  tags:
+    - monasca-api-install
+    - monasca-install-api
+
+- name: Install monasca-api
+  pip:
+    name: "file://{{ tarball.stdout }}"
+    virtualenv: "/opt/venvs/monasca-api"
+  tags:
+    - monasca-api-install
+    - monasca-install-api
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Install monasca-api
+  pip:
+    name: "file://{{ tarball.stdout }}"
+    virtualenv: "/opt/venvs/monasca-api"
+  tags:
+    - monasca-api-install
+    - monasca-install-api
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+  
+- name: Drop monasca-api Config(s)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - src: "monasca-api/monasca-api.service.j2"
+      dest: "/etc/systemd/system/monasca-api.service"
+      owner: "root"
+      group: "root"
+      mode: "0644"
+    - src: "monasca-api/api-config.conf.j2"
+      dest: "/etc/monasca/api-config.conf"
+      owner: "mon-api"
+      group: "root"
+      mode: "0660"
+    - src: "monasca-api/api-config.ini.j2"
+      dest: "/etc/monasca/api-config.ini"
+      owner: "mon-api"
+      group: "root"
+      mode: "0660"
+    - src: "monasca-api/api-logging.conf.j2"
+      dest: "/etc/monasca/api-logging.conf"
+      owner: "mon-api"
+      group: "root"
+      mode: "0660"
+  tags:
+    - monasca-api-config
+    - monasca-install-api
+
+- name: Create monasca-api symbolic links
+  file:
+    src: "/etc/monasca/{{ item }}"
+    dest: "/etc/{{ item }}"
+    state: link
+  with_items:
+    - "api-config.conf"
+    - "api-config.ini"
+    - "api-logging.conf"
+  tags:
+    - monasca-api-links
+    - monasca-install-api
+
+- name: Ensure monasca-api launches on boot
+  service:
+    name: "monasca-api"
+    enabled: "yes"
+  tags:
+    - monasca-api-boot
+
+
+- name: Restart monasca-api
+  service:
+    name: "monasca-api"
+    state: "restarted"
+  tags:
+    - monasca-api-restart
+    - monasca-install-api

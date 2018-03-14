@@ -1,0 +1,152 @@
+---
+# Author(s)     : Joe Tynan (WIT).
+# Description   : OpenDayLight Playbook will install Java 1.7 and OpenDayLight Lithium or Beryllium on a target server.
+# Documentation : http://wiki.cognet.5g-ppp.eu/mediawiki/index.php/Install_OpenDaylight
+# Funded by     : EU 5G-PPP Cognet project http://www.cognet.5g-ppp.eu/ (https://5g-ppp.eu/cognet/)
+# Maintainer    : Joe Tynan (jtynan@tssg.org), Waterford Institute of Technology
+# Execute cmd 	: ansible-playbook playbook-opendaylight.yml  --extra-vars "option=beryllium"  -i files/RShostsPub
+# Copyright     : Copyright 2016 Waterford Institute of Technology ©
+# License       : Apache 2.0 ( http://www.apache.org/licenses/LICENSE-2.0.txt)
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+
+- name: playbook fow downloading the compressed opendaylight
+  hosts: localhost
+  vars:
+    option: "{{option}}"
+  
+  vars_files:
+    - "group_vars/odl.yml"
+
+  tasks:
+    - name: download lithium gz file
+      get_url: url={{lithium_link}} dest=./lithium.gz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition 
+      when: option == "lithium" and not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+    - name: download lithium gz file
+      get_url: url={{lithium_link}} dest=./lithium.gz mode=0777
+      ## [Marouane Mechteri]: adding condition 
+      when: option == "lithium" and http_proxy is none
+      
+
+    - name: download beryllium gz file
+      get_url: url={{beryllium_link}} dest=./beryllium.gz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition 
+      when: option == "beryllium" and not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+    - name: download beryllium gz file
+      get_url: url={{beryllium_link}} dest=./beryllium.gz mode=0777
+      ## [Marouane Mechteri]: adding condition 
+      when: option == "beryllium" and http_proxy is none
+
+
+
+    - name: download boron gz file
+      get_url: url={{boron_link}} dest=./boron.gz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition 
+      when: option == "boron" and not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+    - name: download boron gz file
+      get_url: url={{boron_link}} dest=./boron.gz mode=0777
+      ## [Marouane Mechteri]: adding condition 
+      when: option == "boron" and http_proxy is none
+
+- name: pre installation playbook
+  hosts: odl
+  remote_user: "{{ansible_user}}"
+  sudo: true
+  tasks:
+
+    - include: ./tasks/common.yml
+    - include: ./tasks/java1.7.yml
+      when: option == "lithium"
+    - include: ./tasks/java1.7.yml
+      when: option == "beryllium"
+    - include: ./tasks/java1.8.yml
+      when: option == "boron"
+
+- name: installation playbook {{option}} 
+  hosts: odl
+  become_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+    
+    - name: unarchiving the zip file to target machine
+      ## [Marouane Mechteri]: updating lithium.gz path
+      unarchive: src=../../../lithium.gz dest=./ copy=yes mode=0777
+      when: option == "lithium"
+    
+    - name: unarchiving the zip file to target machine
+      ## [Marouane Mechteri]: updating beryllium.gz path
+      unarchive: src=../../../beryllium.gz dest=./ copy=yes mode=0777
+      when: option == "beryllium"
+    
+    - name: unarchiving the zip file to target machine
+      ## [Marouane Mechteri]: updating boron.gz path
+      unarchive: src=../../../boron.gz dest=./ copy=yes mode=0777
+      when: option == "boron"
+
+    - name: check whether directory karaf exists
+      stat: path=./karaf
+      register: isKaraf
+  
+    - name: remove karaf directory if exists
+      file: name=./karaf state=absent
+      when: isKaraf.stat.exists
+
+    - name: rename directory
+      command: creates="./karaf" mv ./{{lithium_folder_name}} ./karaf
+      when: option == "lithium"
+
+    - name: rename directory
+      command: creates="./karaf" mv ./{{beryllium_folder_name}} ./karaf
+      when: option == "beryllium"
+    
+    - name: rename directory
+      command: creates="./karaf" mv ./{{boron_folder_name}} ./karaf
+      when: option == "boron"
+
+    - name: add if condition in setenv file
+      lineinfile: dest=./karaf/bin/setenv regexp='if [ "x$JAVA_HOME" = "x" ]; then\nexport JAVA_HOME="/usr"\nfi'  line='if [ "x$JAVA_HOME" = "x" ]; then\nexport JAVA_HOME="/usr"\nfi'
+
+    - name: start command
+      command: /home/{{ ansible_ssh_user }}/karaf/bin/start
+      async: 1
+      poll: 0
+      ignore_errors: true
+
+    - name: wait for service to boot
+      wait_for: host=0.0.0.0 port=6633 delay=30 state=drained 
+
+    - name: command install odl-ovsdb-openstack odl-dlux-core odl-vtn
+      command: /home/{{ansible_user}}/karaf/bin/client -u karaf feature:install odl-ovsdb-openstack odl-dlux-core odl-vtn-manager-neutron odl-vtn-manager-rest

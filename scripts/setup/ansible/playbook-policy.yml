@@ -1,0 +1,111 @@
+---
+# Author(s)     : Joe Tynan (WIT), Angel Martin Vicomtech.
+# Description   : Install Drools. 
+# Documentation : 
+# Funded by     : EU 5G-PPP Cognet project http://www.cognet.5g-ppp.eu/ (https://5g-ppp.eu/cognet/)
+# Maintainer    : Joe Tynan (jtynan@tssg.org), Waterford Institute of Technology
+# Copyright     : Copyright 2016 Waterford Institute of Technology ©
+# License       : Apache 2.0 ( http://www.apache.org/licenses/LICENSE-2.0.txt)
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Install zip, maven  and update OS
+  hosts: policy
+  remote_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+
+  - name: apt-get update the server
+    apt: update_cache=yes name={{item}} state=latest
+    with_items:
+
+    - zip
+    - maven
+    - inotify-tools
+    - python-virtualenv
+    - python-pip
+    - apache2
+    - php5
+
+
+  - name: python dependencies
+    pip: name={{item}} state=latest
+    ## [Marouane Mechteri]: adding proxy and condition
+    when: not(http_proxy is none)
+    environment:
+      http_proxy: "{{ http_proxy }}"
+      https_proxy: "{{ https_proxy }}"
+      no_proxy: "{{ ansible_default_ipv4.address }}"
+    with_items:
+
+    - kafka-python
+    - requests
+
+  - name: python dependencies
+    pip: name={{item}} state=latest
+    ## [Marouane Mechteri]: adding condition
+    when: http_proxy is none
+    with_items:
+
+    - kafka-python
+    - requests
+
+
+- name: java pre installation
+  hosts: policy
+  remote_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+
+    - include: tasks/common.yml
+    - include: tasks/java1.8.yml
+
+- name: copy policy engine
+  hosts: policy
+  remote_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+  
+  - name: copy policy engine
+    copy: src=files/policy.tar.gz dest=/home/cognet/policy.tar.gz
+
+  - name: copy logger engine
+    copy: src=files/logger.zip dest=/home/cognet/logger.zip
+
+- name: extract policy engine
+  hosts: policy
+  remote_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+    - name: uncompress policy engine
+      command: tar xzf /home/cognet/policy.tar.gz
+
+    - name: uncompress logger engine
+      command: unzip /home/cognet/logger.zip
+
+    - name: move syslog configuration file
+      command: mv /home/cognet/logger/51-policy.conf /etc/rsyslog.d/
+
+    - name: move logger engine
+      command: mv /home/cognet/logger /var/www/html/
+
+    - name: move init
+      command: mv /home/cognet/policy_manager/rc.local /etc/rc.local
+
+    - name: reboot machine
+      command: /sbin/reboot
+
+

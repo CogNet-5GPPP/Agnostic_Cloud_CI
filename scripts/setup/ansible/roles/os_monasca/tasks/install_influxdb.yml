@@ -1,0 +1,80 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Download influxdb
+  get_url:
+    url: "https://dl.influxdata.com/influxdb/releases/influxdb_{{ influxdb_version }}_amd64.deb"
+    dest: "/root/influxdb_{{ influxdb_version }}_amd64.deb"
+    mode: 0440
+  tags:
+    - monasca-influxdb-download
+    - monasca-install-influxdb
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Download influxdb
+  get_url:
+    url: "https://dl.influxdata.com/influxdb/releases/influxdb_{{ influxdb_version }}_amd64.deb"
+    dest: "/root/influxdb_{{ influxdb_version }}_amd64.deb"
+    mode: 0440
+  tags:
+    - monasca-influxdb-download
+    - monasca-install-influxdb
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+- name: Install influxdb
+  apt:
+    deb: "/root/influxdb_{{ influxdb_version }}_amd64.deb"
+  tags:
+    - monasca-install-influxdb
+
+- name: Drop InfluxDB Config(s)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "0644"
+  with_items:
+    - src: "influxdb/influxdb.conf.j2"
+      dest: "/etc/influxdb/influxdb.conf"
+      owner: "root"
+      group: "root"
+    - src: "influxdb/influxdb.j2"
+      dest: "/etc/default/influxdb"
+      owner: "root"
+      group: "root"
+  register: influxdb_config
+  tags:
+    - monasca-influxdb-config
+    - monasca-install-influxdb
+
+- name: Restart influxdb
+  service:
+    name: "influxdb"
+    state: "restarted"
+  when: influxdb_config.changed
+  tags:
+    - influxdb-restart
+    - monasca-install-influxdb

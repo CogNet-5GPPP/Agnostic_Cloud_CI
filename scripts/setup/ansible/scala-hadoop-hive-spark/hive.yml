@@ -1,0 +1,80 @@
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+############### playbook for installing derby and hive in master ###########################
+- name: playbook for installing derby and hive in master
+  hosts: spark_master
+  remote_user: "{{ansible_user}}"
+  sudo: yes 
+  vars_files:
+  - ../group_vars/spark_master.yml
+  #vars:
+  #
+  #  hive_folder_name: "apache-hive-2.0.1-bin"
+  #  derby_folder_name: "db-derby-10.10.2.0-bin"
+      
+  tasks:
+  
+  ###### unzipping the compressed file into local directory######
+  - name: unarchiving the hive zip file
+    unarchive: src=../hive.tar.gz dest=./ copy=yes mode=0777
+  
+  - name: remove hive directory if exists
+    file: name=/usr/local/hive state=absent
+
+  - name: rename directory
+    command: creates="/usr/local/hive" mv ./{{hive_folder_name}} /usr/local/hive
+    
+  - name: unarchiving the derby zip file
+    unarchive: src=../derby.tar.gz dest=./ copy=yes mode=0777
+  
+  - name: remove derby directory if exists
+    file: name=/usr/local/derby state=absent
+
+  - name: rename directory
+    command: creates="/usr/local/derby" mv ./{{derby_folder_name}} /usr/local/derby
+    
+  
+  ############# enviroment variable for hive #####################
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export HIVE_HOME=/usr/local/hive/'  line='export HIVE_HOME=/usr/local/hive/ '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export PATH=$PATH:$HIVE_HOME/bin'  line='export PATH=$PATH:$HIVE_HOME/bin '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export CLASSPATH=$CLASSPATH:/usr/local/hadoop/lib/*:.'  line='export CLASSPATH=$CLASSPATH:/usr/local/hadoop/lib/*:. '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export CLASSPATH=$CLASSPATH:/usr/local/hive/lib/*:.'  line='export CLASSPATH=$CLASSPATH:/usr/local/hive/lib/*:. '
+  
+  ############ enviroment variable for derby######################
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export DERBY_HOME=/usr/local/derby'  line='export DERBY_HOME=/usr/local/derby '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export PATH=$PATH:$DERBY_HOME/bin'  line='export PATH=$PATH:$DERBY_HOME/bin '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export CLASSPATH=$CLASSPATH:$DERBY_HOME/lib/derby.jar:$DERBY_HOME/lib/derbytools.jar:$DERBY_HOME/lib/derbyclient.jar'  line='export CLASSPATH=$CLASSPATH:$DERBY_HOME/lib/derby.jar:$DERBY_HOME/lib/derbytools.jar:$DERBY_HOME/lib/derbyclient.jar '
+  
+  #########################configuring files for hive##################################################
+  - name: copying file
+    command: cp /usr/local/hive/conf/hive-env.sh.template /usr/local/hive/conf/hive-env.sh
+  
+  - lineinfile: dest=/usr/local/hive/conf/hive-env.sh regexp='export HADOOP_HOME=/usr/local/hadoop'  line='export HADOOP_HOME=/usr/local/hadoop '
+  
+  - command: cp /usr/local/derby/lib/derbyclient.jar /usr/local/hive/lib/derbyclient.jar
+  - command: cp /usr/local/derby/lib/derbytools.jar /usr/local/hive/lib/derbytools.jar
+  - command: cp /usr/local/derby/lib/derbyclient.jar /usr/local/hive/lib/derbyclient.jar
+  - command: cp /usr/local/derby/lib/derbytools.jar /usr/local/hive/lib/derbytools.jar
+  
+  - name: copy hive-site.xml from files in local machine to remote target machine 
+    copy: src=./files/hive/hive-site.xml dest=/usr/local/hive/conf/ mode=0777
+  
+  - name: copy jpox.properties from files in local machine to remote target machine 
+    file: name=/usr/local/hive/conf/jpox.properties state=absent
+  - copy: src=./files/hive/jpox.properties dest=/usr/local/hive/conf/ mode=0777
+  
+  ############## sourcing bashrc #####################
+  - name: source bashrc
+    sudo: no
+    shell: . /home/{{ ansible_ssh_user }}/.bashrc && source /home/{{ ansible_ssh_user }}/.bashrc
+    args:
+      executable: /bin/bash
+
+
+  ############ running derby #############
+  - name: running derby
+    command: nohup /usr/local/derby/bin/startNetworkServer -h 0.0.0.0 &
+  - name: intialize db in derby
+    command: nohup /usr/local/hive//bin/schematool -initSchema -dbType derby
+    ignore_errors: true

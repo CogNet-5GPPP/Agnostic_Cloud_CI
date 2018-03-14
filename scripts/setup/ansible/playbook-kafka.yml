@@ -1,0 +1,132 @@
+---
+# Author(s)	: Joe Tynan (WIT), Siblee Islam (WIT).
+# Description	: 
+# Documentation : 
+# Funded by	: EU 5G-PPP Cognet project http://www.cognet.5g-ppp.eu/ (https://5g-ppp.eu/cognet/)
+# Maintainer	: Joe Tynan (jtynan@tssg.org), Waterford Institute of Technology
+# Copyright	: Copyright 2016 Waterford Institute of Technology © 
+# License	: Apache 2.0 ( http://www.apache.org/licenses/LICENSE-2.0.txt)
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+
+- name: playbook for downloading the compressed kafka
+  hosts: localhost
+  vars_files:
+    - "group_vars/kafka.yml"
+
+  tasks:
+    - name: download kafka tgz file
+      get_url: url={{kafka_link}} dest=./kafka.tgz mode=0777 
+      ## [Marouane Mechteri]: adding proxy and condition
+      when: not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+    - name: there is NO proxy. download kafka tgz file
+      get_url: url={{kafka_link}} dest=./kafka.tgz mode=0777
+      ## [Marouane Mechteri]: adding condition
+      when: http_proxy is none
+
+- name: pre installation playbook
+  hosts: kafka
+  remote_user: "{{ansible_user}}"
+  sudo: true
+  tasks:
+
+  - include: ./tasks/common.yml
+  - include: ./tasks/java1.8.yml
+  
+
+- name: kafka installation playbook
+  hosts: kafka
+  become_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+    
+    - name: installing Zookeeper
+      apt: name=zookeeperd update_cache=yes state=latest
+      sudo_user: root
+      sudo: yes
+
+    - name: unarchiving the zip file to target machine
+      unarchive: src=./kafka.tgz dest=./ copy=yes mode=0775
+
+    - name: check whether directory kafka exists
+      stat: path=./kafka
+      register: isKafka
+  
+    - name: remove kafka directory if exists
+      file: name=./kafka state=absent
+      when: isKafka.stat.exists
+
+    - name: rename directory
+      command: creates="./kafka" mv ./{{kafka_folder_name}} ./kafka
+    
+    - name: add line "delete.topic.enable = true" to the server.properties of config file
+      lineinfile: dest=./kafka/config/server.properties regexp="delete.topic.enable = true"  line="delete.topic.enable = true"
+
+    - name: retrieve the hostname of the target machine
+      shell: hostname
+      register: target_hostname
+
+    - name: retrieve the ip address ot the target machine
+      shell: hostname -I
+      register: target_ip
+
+    - name: edit hosts file in etc
+      sudo_user: root
+      sudo: yes
+      lineinfile: dest=/etc/hosts regexp="{{target_ip.stdout}} kafka"  line="{{target_ip.stdout}} kafka"
+
+    - name: updating etc hosts file variable   
+      sudo_user: root
+      sudo: yes
+      lineinfile: dest=/etc/hosts regexp='{{target_ip.stdout}} {{target_hostname.stdout}}'  line='{{target_ip.stdout}} {{target_hostname.stdout}}'
+    
+    - name: create kafka server on port 9092
+      template: src=templates/kafka.server.properties dest=~/kafka/config/kafka.server.properties
+    - name: start kafka server on port 9092
+      shell: nohup ./kafka/bin/kafka-server-start.sh ./kafka/config/kafka.server.properties > ./kafka/kafka.log 2>&1 &
+      tags:
+        - kafka-server
+
+    - name: wait for zookeeper to activate
+      wait_for: host=0.0.0.0 port=2181 delay=2 
+    - name: wait for kafka to activate
+      wait_for: host=0.0.0.0 port=9092 delay=2 
+
+    - name: Create kafka topics
+      command: "/home/cognet/kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions {{ item.partitions }} --topic {{ item.topic }}"
+      with_items:
+      - topic: "DSE_FLOOD_SYNC_HOR_Q"
+        partitions: "1"
+      - topic: "DSE_FLOOD_SYNC_VER_Q"
+        partitions: "1"
+      - topic: "DSE_SPAM_SYNC_VER_Q"
+        partitions: "1"
+      - topic: "DSE_ICMP"
+        partitions: "1"
+      - topic: "DSE_AMP"
+        partitions: "1"
+      - topic: "DSE_FLOOD_DNS_Q"
+        partitions: "1"
+      tags:
+        - machine-learning-kafka-topics
+

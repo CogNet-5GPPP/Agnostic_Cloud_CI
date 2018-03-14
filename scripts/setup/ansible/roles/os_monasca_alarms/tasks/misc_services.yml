@@ -1,0 +1,36 @@
+---
+# ©Copyright 2015 Hewlett-Packard Development Company, L.P.
+
+- name: Alarms for various common services
+  monasca_alarm_definition:
+    name: "{{item.name}}"
+    description: "{{item.description | default('') }}"
+    expression: "{{item.expression}}"
+    keystone_token: "{{default_notification.keystone_token}}"
+    match_by: "{{item.match_by | default(['hostname']) }}"
+    monasca_api_url: "{{default_notification.monasca_api_url}}"
+    severity: "{{item.severity | default('LOW') }}"
+    alarm_actions:
+      - "{{default_notification.notification_method_id}}"
+    ok_actions:
+      - "{{default_notification.notification_method_id}}"
+    undetermined_actions:
+      - "{{default_notification.notification_method_id}}"
+  with_items:
+    - { name: "RabbitMQ Queue Depth",
+        description: "Alarms when the depth of the message queue is high",
+        expression: "avg(rabbitmq.queue.messages) > 10 times 3",
+        severity: "MEDIUM",
+        match_by: [queue, hostname]}
+    - { name: "MySQL Slow Query Rate",
+        description: "Alarms when the slow query rate is high",
+        expression: "avg(mysql.performance.slow_queries) > 10 times 3"}
+    - { name: "Apache Status",
+        description: "Alarms on failure to reach the Apache status endpoint",
+        expression: "apache.status > 0",
+        severity: "HIGH"}
+    - { name: "Apache Idle Worker Count",
+        description: "Alarms when there are no idle workers in the Apache server",
+        expression: "avg(apache.performance.idle_worker_count) < 1 times 3",
+        severity: "MEDIUM"}
+    - { name: "NTP Time Sync", description: "Alarms when the NTP time offset is high", expression: "ntp.offset > 5 or ntp.offset < -5"}

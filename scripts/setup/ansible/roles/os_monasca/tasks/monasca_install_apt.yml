@@ -1,0 +1,91 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Download NVM install script
+  get_url:
+    url: "https://raw.githubusercontent.com/creationix/nvm/v{{ nvm_version }}/install.sh"
+    dest: "/root/nvm_install.sh"
+    mode: 0750
+  register: nvm_script
+  tags:
+    - monasca-nvm
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+- name: Download NVM install script
+  get_url:
+    url: "https://raw.githubusercontent.com/creationix/nvm/v{{ nvm_version }}/install.sh"
+    dest: "/root/nvm_install.sh"
+    mode: 0750
+  register: nvm_script
+  tags:
+    - monasca-nvm
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+
+- name: Run NVM install script
+  command: "/root/nvm_install.sh"
+  when: nvm_script.changed
+  tags:
+    - monasca-nvm
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+
+- name: Run NVM install script
+  command: "/root/nvm_install.sh"
+  when: nvm_script.changed
+  tags:
+    - monasca-nvm
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+
+- name: Check apt last update file
+  stat:
+    path: /var/cache/apt
+  register: apt_cache_stat
+
+- name: Update apt if needed
+  apt:
+    update_cache: yes
+  when: "ansible_date_time.epoch|float - apt_cache_stat.stat.mtime > {{cache_timeout}}"
+
+- name: Remove Maven2
+  apt:
+    pkg: maven2
+    state: absent
+
+- name: Install apt packages
+  apt:
+    pkg: "{{ item }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: "{{ monasca_apt_packages }}"

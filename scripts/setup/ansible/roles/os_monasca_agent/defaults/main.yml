@@ -1,0 +1,62 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+## Monasca
+monasca_agent_git_repo: "https://git.openstack.org/openstack/monasca-agent.git"
+monasca_client_git_repo: "https://git.openstack.org/openstack/python-monascaclient.git"
+## [Marouane Mechteri]
+#monasca_git_branch: "master"
+monasca_git_branch: "stable/ocata"
+monasca_ip_address: "127.0.0.1"
+
+## Keystone
+keystone_ip_address: "127.0.0.1"
+os_username: "admin"
+os_password: "secretadmin"
+os_project_name: "admin"
+
+## Database
+mysql_root_pass: "secretdatabase"
+mysql_host: "127.0.0.1"
+
+## Apache plugin conf
+apache_status_user: "guest"
+apache_status_password: "guest"
+
+## NTP
+agent_ntp_servers:
+  - "{{ monasca_ip_address }}"
+
+## System info
+monasca_system_user_name: monasca
+monasca_system_group_name: monasca
+monasca_system_shell: /bin/false
+monasca_system_comment: monasca system user
+monasca_system_user_home: "/var/lib/{{ monasca_system_user_name }}"
+
+monasca_agent_required_pip_packages:
+  - virtualenv
+  - virtualenv-tools
+  - httplib2
+
+# Common pip packages
+monasca_agent_pip_packages:
+  - PyMySQL
+  - python-neutronclient
+  - MySQL-python
+  - kafka-python==0.9.2

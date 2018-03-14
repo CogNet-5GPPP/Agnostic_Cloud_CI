@@ -1,0 +1,31 @@
+---
+# ©Copyright 2015 Hewlett-Packard Development Company, L.P.
+
+- name: Setup default notification method
+  monasca_notification_method:
+    name: "{{ notification_name }}"
+    type: "{{ notification_type }}"
+    address: "{{ notification_address }}"
+    keystone_url: "{{ keystone_url }}"
+    keystone_user: "{{ os_mon_username }}"
+    keystone_password: "{{ os_mon_password }}"
+    keystone_project: "{{ os_mon_project_name }}"
+  tags:
+    - system_alarms
+    - monasca_alarms
+    - openstack_alarms
+    - service_alarms
+  register: default_notification
+
+# Include the various alarm sets
+- include: system.yml
+  tags: system_alarms
+
+#- include: monasca.yml
+#  tags: monasca_alarms
+#
+- include: openstack.yml
+  tags: openstack_alarms
+#
+#- include: misc_services.yml
+#  tags: service_alarms

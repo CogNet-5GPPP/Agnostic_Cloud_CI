@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  author: Tim Kuhlman
+  description: Sets up default alarm definitions for Monasca
+  company: HP
+  license: Apache
+  min_ansible_version: 1.7
+  platforms:
+  - name: GenericLinux
+    versions:
+    - all
+  - name: Ubuntu
+    versions:
+    - trusty
+  - name: Debian
+    versions:
+    - jessie
+  categories:
+  - monitoring
+dependencies: []

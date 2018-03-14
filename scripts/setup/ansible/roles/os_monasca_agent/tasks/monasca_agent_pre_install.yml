@@ -1,0 +1,221 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Create the system group
+  group:
+    name: "{{ monasca_system_group_name }}"
+    state: "present"
+    system: "yes"
+  tags:
+    - system-groups
+
+- name: Create system user
+  user:
+    name: "{{ monasca_system_user_name }}"
+    group: "{{ monasca_system_group_name  }}"
+    comment: "{{ monasca_system_comment }}"
+    shell: "{{ monasca_system_shell }}"
+    system: "yes"
+    createhome: "yes"
+    home: "{{ monasca_system_user_home }}"
+  tags:
+    - system-user
+
+- name: Create dirs
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  with_items:
+    - { path: "/opt/cloned-repos"  }
+    - { path: "/etc/monasca/agent/conf.d"  }
+    - { path: "/usr/lib/monasca/agent/custom_checks.d"  }
+    - { path: "/usr/lib/monasca/agent/custom_detect.d"  }
+  tags:
+    - monasca-agent-dirs
+
+- name: Ensure host on hosts file
+  lineinfile:
+    dest: "/etc/hosts"
+    line: "{{ ansible_default_ipv4.address }} {{ ansible_hostname }}"
+  tags:
+    - monasca-agent-hosts
+
+- include: monasca_agent_install_apt.yml
+  when:
+    - ansible_pkg_mgr == 'apt'
+  tags:
+    - monasca-agent-install
+    - monasca-agent-apt-packages
+
+- name: Install required pip packages
+  pip:
+    name: "{{ item }}"
+    state: present
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: "{{ monasca_agent_required_pip_packages }}"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-pip-packages
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+    
+
+
+- name: Install required pip packages
+  pip:
+    name: "{{ item }}"
+    state: present
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: "{{ monasca_agent_required_pip_packages }}"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-pip-packages
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+
+- name: Create monasca-agent venv dir
+  file:
+    path: "/opt/venvs/monasca-agent"
+    state: directory
+    owner: "root"
+    group: "monasca"
+    mode: "0775"
+  tags:
+    - monasca-agent-venv-dir
+
+- name: Create monasca-agent virtualenv
+  command: "virtualenv /opt/venvs/monasca-agent"
+  args:
+    creates: "/opt/venvs/monasca-agent/bin"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-create-venv
+
+- name: Upgrade pip (venv)
+  pip:
+    name: "pip"
+    state: latest
+    virtualenv: "/opt/venvs/monasca-agent"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-upgrade-pip
+
+- name: Ensure monasca group on venv
+  file:
+    dest: "/opt/venvs/monasca-agent"
+    owner: "root"
+    group: "monasca"
+    recurse: "yes"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-create-venv
+
+- name: Install pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    state: present
+    virtualenv: "/opt/venvs/monasca-agent"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: "{{ monasca_agent_pip_packages }}"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-pip-packages
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+
+- name: Install pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    state: present
+    virtualenv: "/opt/venvs/monasca-agent"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: "{{ monasca_agent_pip_packages }}"
+  tags:
+    - monasca-agent-install
+    - monasca-agent-pip-packages
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+- name: Clone monasca git repositories
+  git:
+    repo: "{{ item.repo }}"
+    dest: "/opt/cloned-repos/{{ item.dest }}"
+    version: "{{ item.version }}"
+    force: "yes"
+  with_items:
+    - repo: "{{ monasca_agent_git_repo }}"
+      dest: "monasca-agent"
+      version: "{{ monasca_git_branch }}"
+    - repo: "{{ monasca_client_git_repo }}"
+      dest: "monasca-client"
+      version: "{{ monasca_git_branch }}"
+  tags:
+    - monasca-agent-clone-repo
+    - monasca-agent-install
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Clone monasca git repositories
+  git:
+    repo: "{{ item.repo }}"
+    dest: "/opt/cloned-repos/{{ item.dest }}"
+    version: "{{ item.version }}"
+    force: "yes"
+  with_items:
+    - repo: "{{ monasca_agent_git_repo }}"
+      dest: "monasca-agent"
+      version: "{{ monasca_git_branch }}"
+    - repo: "{{ monasca_client_git_repo }}"
+      dest: "monasca-client"
+      version: "{{ monasca_git_branch }}"
+  tags:
+    - monasca-agent-clone-repo
+    - monasca-agent-install
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none

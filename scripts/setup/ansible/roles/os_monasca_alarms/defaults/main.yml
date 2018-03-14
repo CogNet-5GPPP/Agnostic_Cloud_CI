@@ -1,0 +1,14 @@
+---
+# ©Copyright 2015 Hewlett-Packard Development Company, L.P.
+
+## Keystone
+keystone_ip_address: "127.0.0.1"
+os_mon_username: "mini-mon"
+os_mon_password: "password"
+os_mon_project_name: "mini-mon"
+keystone_url: "http://{{ keystone_ip_address }}:35357/v3"
+
+notification_address: root@localhost
+notification_name: 'Default Email'
+notification_type: EMAIL
+keystone_project:

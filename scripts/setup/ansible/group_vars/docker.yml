@@ -1,0 +1,4 @@
+---
+docker_host_ip: 0.0.0.0 
+docker_host_port: 4243 
+

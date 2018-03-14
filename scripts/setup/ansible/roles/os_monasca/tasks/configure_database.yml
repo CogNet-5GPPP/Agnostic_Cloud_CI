@@ -1,0 +1,60 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Update MySQL root password for all root accounts
+  mysql_user:
+    login_user: "root"
+    login_password: "{{ mysql_root_pass }}"
+    name: "root"
+    host: "{{ item }}"
+    password: "{{ mysql_root_pass }}"
+    check_implicit_admin: yes
+  with_items:
+    - "{{ ansible_hostname }}"
+    - 127.0.0.1
+    - ::1
+    - localhost
+  tags:
+    - monasca-install-mariadb
+
+- name: Drop MariaDB Config(s)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "0644"
+  with_items:
+    - src: "mysql/my.cnf.j2"
+      dest: "/etc/mysql/my.cnf"
+      owner: "root"
+      group: "root"
+    - src: "mysql/root.cnf.j2"
+      dest: "/root/.my.cnf"
+      owner: "root"
+      group: "root"
+  register: mariadb_config
+  tags:
+    - mariadb-config
+    - monasca-install-mariadb
+
+- name: Restart mariadb
+  service:
+    name: "mysql"
+    state: "restarted"
+  when: mariadb_config.changed
+  tags:
+    - mariadb-restart
+    - monasca-install-mariadb

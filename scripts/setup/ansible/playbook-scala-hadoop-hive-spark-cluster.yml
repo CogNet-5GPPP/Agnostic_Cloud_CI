@@ -1,0 +1,246 @@
+---
+# Author(s)     : Joe Tynan (WIT).
+# Description   : Installs Spark Master and slaves onto target servers
+# Documentation : http://wiki.cognet.5g-ppp.eu/mediawiki/index.php/Install_ML_Spark,_Hive,_Hadoop
+# Funded by     : EU 5G-PPP Cognet project http://www.cognet.5g-ppp.eu/ (https://5g-ppp.eu/cognet/)
+# Execute cmd 	: ansible-playbook 
+# Maintainer    : Joe Tynan (jtynan@tssg.org), Waterford Institute of Technology
+# Copyright     : Copyright 2016 Waterford Institute of Technology ©
+# License       : Apache 2.0 ( http://www.apache.org/licenses/LICENSE-2.0.txt)
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+
+- name: playbook fow downloading the compressed spark hive and hadoop
+  hosts: localhost
+  vars_files:
+  - group_vars/spark_master.yml 
+  tasks:
+    - name: download spark tgz file
+      get_url: url={{spark_link}}{{spark_zip_file_name}} dest=./spark.tgz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition
+      when: not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+    - name: download spark tgz file
+      get_url: url={{spark_link}}{{spark_zip_file_name}} dest=./spark.tgz mode=0777
+      ## [Marouane Mechteri]: adding condition
+      when: http_proxy is none
+
+    - name: download hadoop gz file
+      get_url: url={{hadoop_link}}{{hadoop_zip_file_name}} dest=./hadoop.tar.gz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition
+      when: not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+        
+    - name: download hadoop gz file
+      get_url: url={{hadoop_link}}{{hadoop_zip_file_name}} dest=./hadoop.tar.gz mode=0777
+      ## [Marouane Mechteri]: adding condition
+      when: http_proxy is none
+
+    - name: download hive gz file
+      get_url: url={{hive_link}}{{hive_zip_file_name}} dest=./hive.tar.gz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition
+      when: not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+        
+
+    - name: download hive gz file
+      get_url: url={{hive_link}}{{hive_zip_file_name}} dest=./hive.tar.gz mode=0777
+      ## [Marouane Mechteri]: adding condition
+      when: http_proxy is none
+
+    - name: download derby gz file
+      get_url: url={{derby_link}}{{derby_zip_file_name}} dest=./derby.tar.gz mode=0777
+      ## [Marouane Mechteri]: adding proxy and condition
+      when: not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+    - name: download derby gz file
+      get_url: url={{derby_link}}{{derby_zip_file_name}} dest=./derby.tar.gz mode=0777
+      ## [Marouane Mechteri]: adding condition
+      when: http_proxy is none
+      
+      
+- include: scala-hadoop-hive-spark/common-java-scala.yml
+- include: scala-hadoop-hive-spark/hadoop.yml     
+- include: scala-hadoop-hive-spark/hive.yml
+- include: scala-hadoop-hive-spark/spark.yml
+
+########### playbook for configuring and running applications in master only ####################
+- name: configuring and running applications in master
+  hosts: spark_master
+  remote_user: "{{ansible_user}}"
+  sudo: yes
+  vars:
+    num_hosts: "{{ groups['spark_slaves'] | length+1 }}"
+      
+  tasks:
+
+  ############ spark configuration #############
+  - name: create slaves file in spark conf directory
+    command: cp /usr/local/spark/conf/slaves.template /usr/local/spark/conf/slaves
+  
+  - name: updating file 'slaves' in master
+    lineinfile: dest=/usr/local/spark/conf/slaves regexp={{item}}  line={{item}}
+    with_items:
+      - "{{groups['spark_slaves']}}"
+  
+  ############# hadoop configuration###############
+    
+  
+  ####updating the hosts file#####
+  - lineinfile: dest=/etc/hosts regexp="{{hostvars[item]['ansible_ssh_host']}} {{item}}" line="{{hostvars[item]['ansible_ssh_host']}} {{item}}"
+    with_items:
+      - "{{groups['spark_master']}}"
+      - "{{groups['spark_slaves']}}"
+  
+  #####getting the id_rsa.pub locally#####
+  - name: getting the id_rsa.pub locally
+    fetch: src=/home/{{ ansible_ssh_user }}/.ssh/id_rsa.pub dest=./temp.txt flat=yes
+    
+  ###### other file updating####
+  - name: creating master file
+    file: dest=/usr/local/hadoop/etc/hadoop/masters state=touch
+  - lineinfile: dest=/usr/local/hadoop/etc/hadoop/masters regexp="{{item}}" line="{{item}}"
+    with_items:
+      - "{{groups['spark_master']}}"
+  - lineinfile: dest=/usr/local/hadoop/etc/hadoop/slaves regexp="{{item}}" line="{{item}}"
+    with_items:
+      - "{{groups['spark_slaves']}}"
+      
+   
+  ##### updating necssary xml file for configuration#########
+  - name: copy hdfs-site.xml from files in local machine to remote target machine 
+    file: name=/usr/local/hadoop/etc/hadoop/hdfs-site.xml state=absent
+  - copy: src=./scala-hadoop-hive-spark/files/hadoop-cluster/hdfs-site.xml dest=/usr/local/hadoop/etc/hadoop/ mode=0777
+  - replace: dest=/usr/local/hadoop/etc/hadoop/hdfs-site.xml regexp='<value>1</value>' replace='<value>{{num_hosts}}</value>'
+  
+  - name: copy yarn-site.xml from files in local machine to remote target machine 
+    file: name=/usr/local/hadoop/etc/hadoop/yarn-site.xml state=absent
+  - copy: src=./scala-hadoop-hive-spark/files/hadoop-cluster/yarn-site.xml dest=/usr/local/hadoop/etc/hadoop/ mode=0777
+  - replace: dest=/usr/local/hadoop/etc/hadoop/yarn-site.xml regexp='yourservername' replace={{item}}
+    with_items:
+      - "{{groups['spark_master']}}"
+  
+  - name: copy mapred-site.xml from files in local machine to remote target machine 
+    file: name=/usr/local/hadoop/etc/hadoop/mapred-site.xml state=absent
+  - copy: src=./scala-hadoop-hive-spark/files/hadoop-cluster/mapred-site.xml dest=/usr/local/hadoop/etc/hadoop/ mode=0777
+  
+  #### arranging the folders ######
+  - name: removing hadoop_tmp directory
+    file: dest=/usr/local/hadoop_tmp state=absent
+  - file: dest=/usr/local/hadoop_tmp state=directory
+  - file: dest=/usr/local/hadoop_tmp/hdfs/namenode state=directory
+  - file: dest=/usr/local/hadoop_tmp/hdfs/datanode state=directory
+  
+  - name: providing ownership of a folder
+    command: chown {{ ansible_ssh_user }}  -R /usr/local/hadoop_tmp/
+  
+  
+######## running hadoop ############
+     
+  - name: hdfs formating
+    sudo: no
+    shell: ./hdfs namenode -format chdir=/usr/local/hadoop/bin/
+  
+  - name: adding ssh-key to known_host
+    lineinfile: dest=/etc/ssh/ssh_config regexp='StrictHostKeyChecking no'  line='StrictHostKeyChecking no'
+
+  # - name: running dfs 
+  #   sudo: no
+  #   shell: ./start-dfs.sh chdir=/usr/local/hadoop/sbin/
+  # - name: running yarn 
+  #   sudo: no
+  #   shell: ./start-yarn.sh chdir=/usr/local/hadoop/sbin/
+  
+############### playbook for configuring and running applications in slaves only ###################
+- name: configuring and running applications in slaves
+  hosts: spark_slaves
+  remote_user: "{{ansible_user}}"
+  sudo: yes
+  vars:
+    - id_rsa_pub: "{{ lookup('file', './temp.txt') }}"  
+    
+  tasks:
+  
+  ############ spark configuration #############
+  - name: create spark-env.sh file in spark conf directory
+    command: cp /usr/local/spark/conf/spark-env.sh.template /usr/local/spark/conf/spark-env.sh
+  
+  - name: updating spark-env.sh in slaves
+    lineinfile: dest=/usr/local/spark/conf/spark-env.sh regexp='export SPARK_MASTER_IP={{item}}'  line='export SPARK_MASTER_IP={{item}}'
+    with_items:
+      - "{{groups['spark_master']}}" 
+  - lineinfile: dest=/usr/local/spark/conf/spark-env.sh regexp='export SPARK_WORKER_CORES=2'  line='export SPARK_WORKER_CORES=2'
+  - lineinfile: dest=/usr/local/spark/conf/spark-env.sh regexp='export SPARK_WORKER_MEMORY=2000m'  line='export SPARK_WORKER_MEMORY=2000m'
+  - lineinfile: dest=/usr/local/spark/conf/spark-env.sh regexp='export SPARK_WORKER_INSTANCES=2'  line='export SPARK_WORKER_INSTANCES=2'
+  
+  ############# hadoop configuration###############
+  
+  #### providing access from master####
+  - name: adding id_rsa.pub from master to authorized_keys
+    lineinfile: dest=/home/{{ ansible_ssh_user }}/.ssh/authorized_keys regexp="{{id_rsa_pub}}" line="{{id_rsa_pub}}"
+  
+  #### arranging the folders
+  - name: removing hadoop_tmp directory
+    file: dest=/usr/local/hadoop_tmp/hdfs state=absent
+  - file: dest=/usr/local/hadoop_tmp/ state=directory
+  - file: dest=/usr/local/hadoop_tmp/hdfs/namenode state=directory
+  - file: dest=/usr/local/hadoop_tmp/hdfs/datanode state=directory
+  
+  - name: providing ownership of a folder
+    command: chown {{ ansible_ssh_user }}  -R /usr/local/hadoop_tmp/
+  
+- name: local operations
+  hosts: localhost
+
+  tasks:
+  - name: removing local temp file
+    file: dest=./temp.txt state=absent
+  
+
+########### playbook for synchronizing and running hadoop from master ####################
+- name: configuring and running applications in master
+  hosts: spark_master
+  remote_user: "{{ansible_user}}"
+  sudo: yes
+        
+  tasks:
+
+  - name: synchronizing files
+    sudo: no
+    command: rsync -avxP /usr/local/hadoop/etc/hadoop {{ ansible_ssh_user }}@{{item}}:/usr/local/hadoop/etc/hadoop/
+    with_items:
+      - "{{groups['spark_slaves']}}"
+  
+  - name: running hadoop cluster 
+    sudo: no
+    shell: ./start-all.sh chdir=/usr/local/hadoop/sbin/

@@ -1,0 +1,11 @@
+########## playbook to install java, necessary files and scala in master and slaves ##########
+- name: pre installation playbook (installing java scala)
+  hosts: spark_master, spark_slaves
+  remote_user: "{{ansible_user}}"
+  sudo: true
+  tasks:
+
+  - include: ../tasks/common.yml
+  - include: ../tasks/java1.8.yml
+  - name: installing scala
+    apt: name=scala state=present 

@@ -1,0 +1,78 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Setup monasca-thresh
+  command: "mvn clean package -DskipTests"
+  args:
+    chdir: "/opt/cloned-repos/monasca-thresh/thresh"
+  register: thresh_result
+  changed_when: "thresh_result.rc == 0"
+  tags:
+    - monasca-thresh-install
+    - monasca-install-thresh
+
+- name: Get monasca thrash jar file name
+  shell: "ls -td /opt/cloned-repos/monasca-thresh/thresh/target/monasca-thresh-*-shaded.jar | head -1"
+  register: thresh_jar
+  changed_when: false
+  tags:
+    - monasca-tresh-filename
+    - monasca-install-thresh
+
+- name: Copy thresh jar
+  copy:
+    src: "{{ thresh_jar.stdout }}"
+    dest: "/opt/monasca-thresh/monasca-thresh.jar"
+    remote_src: true
+  tags:
+    - monasca-thresh-cpjar
+    - monasca-install-thresh
+
+- name: Drop monasca-thresh Config(s)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - src: "monasca-thresh/thresh-config.yml.j2"
+      dest: "/etc/monasca/thresh-config.yml"
+      owner: "root"
+      group: "monasca"
+      mode: "0640"
+    - src: "monasca-thresh/monasca-thresh.service.j2"
+      dest: "/etc/systemd/system/monasca-thresh.service"
+      owner: "root"
+      group: "root"
+      mode: "0644"
+  tags:
+    - monasca-thresh-config
+    - monasca-install-thresh
+
+- name: Ensure monasca-thresh launches on boot
+  service:
+    name: "monasca-thresh"
+    enabled: "yes"
+  tags:
+    - monasca-thresh-boot
+
+- name: Restart monasca-thresh
+  service:
+    name: "monasca-thresh"
+    state: "restarted"
+  tags:
+    - monasca-thresh-restart
+    - monasca-install-thresh

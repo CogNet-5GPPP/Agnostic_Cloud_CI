@@ -1,0 +1,20 @@
+#!/bin/bash
+
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=`pwd`
+
+mkdir -p $GOPATH/src/github.com/grafana
+cd $GOPATH/src/github.com/grafana
+cp -r /opt/cloned-repos/grafana .
+cd grafana
+cp /opt/cloned-repos/monasca-ui/grafana-dashboards/* ./public/dashboards/
+
+go run build.go build
+
+source /root/.nvm/nvm.sh
+nvm install {{ node_js_version }}
+nvm use {{ node_js_version }}
+npm config set unsafe-perm true
+npm install
+npm install -g grunt-cli
+grunt --force

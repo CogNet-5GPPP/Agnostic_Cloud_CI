@@ -1,0 +1,9 @@
+---
+
+lithium_link: "https://nexus.opendaylight.org/content/groups/public/org/opendaylight/integration/distribution-karaf/0.3.4-Lithium-SR4/distribution-karaf-0.3.4-Lithium-SR4.tar.gz"
+beryllium_link: "https://nexus.opendaylight.org/content/repositories/public/org/opendaylight/integration/distribution-karaf/0.4.3-Beryllium-SR3/distribution-karaf-0.4.3-Beryllium-SR3.tar.gz"
+boron_link: "https://nexus.opendaylight.org/content/groups/public/org/opendaylight/integration/distribution-karaf/0.5.0-Boron/distribution-karaf-0.5.0-Boron.tar.gz"
+lithium_folder_name: "distribution-karaf-0.2.3-Helium-SR3"
+beryllium_folder_name: "distribution-karaf-0.4.3-Beryllium-SR3"
+boron_folder_name: "distribution-karaf-0.5.0-Boron"
+

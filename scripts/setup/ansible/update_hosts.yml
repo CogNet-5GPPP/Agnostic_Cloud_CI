@@ -1,0 +1,139 @@
+---
+# Author(s)     : Joe Tynan (WIT), Siblee Islam (WIT).
+# Description   :
+# Documentation :
+# Funded by     : EU 5G-PPP Cognet project http://www.cognet.5g-ppp.eu/ (https://5g-ppp.eu/cognet/)
+# Maintainer    : Joe Tynan (jtynan@tssg.org), Waterford Institute of Technology
+# Copyright     : Copyright 2016 Waterford Institute of Technology ©
+# License       : Apache 2.0 ( http://www.apache.org/licenses/LICENSE-2.0.txt)
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Update hosts file to github repository
+  hosts: docker
+  ## [Marouane Mechteri]: using become instead of sudo
+  become: yes
+  remote_user: "{{ansible_user}}"
+  tasks:
+
+    - name: copy rsa and config files
+      copy: src=files/rsa dest=/home/cognet/.ssh/id_rsa_github
+
+    - name: copy rsa and config files
+      copy: src=files/rsa.pub dest=/home/cognet/.ssh/id_rsa_github.pub
+
+    - name: copy rsa and config files
+      copy: src=files/config dest=/home/cognet/.ssh/config
+
+
+    - name: copy rsa and config files
+      copy: src=files/config_proxy dest=/home/cognet/.ssh/config
+      when: not(http_proxy is none)
+
+
+    ##[Marouane Mechteri]: install corkscrew
+    - name: installing corkscrew
+      apt: name=corkscrew
+      when: not(http_proxy is none)
+
+    ##[Marouane Mechteri]: adding proxy parameters in the config file
+    - name: add ProxyCommand in the config file
+      lineinfile:
+        dest=/home/cognet/.ssh/config
+        line='    ProxyCommand /usr/bin/corkscrew {{proxy_host}} {{proxy_port}} %h %p'
+        insertafter="^#?port"
+      when: not(http_proxy is none)
+
+    - name: set permissions
+      file:
+        path: /home/cognet/.ssh/id_rsa_github
+        owner: "{{ansible_user}}"
+        mode: 0600
+
+    - name: set permissions
+      file:
+        path: /home/cognet/.ssh/id_rsa_github.pub
+        owner: "{{ansible_user}}"
+        mode: 0600
+
+    - name: set permissions
+      file:
+        path: /home/cognet/.ssh/config
+        owner: "{{ansible_user}}"
+        mode: 0600
+
+    ## [Marouane Mechteri]: configure GIT_SSH_COMMAND with proxy parameters since it does not work with .ssh/config file
+    ## there is two ways to do it: one without export and the second one with export
+    - name: clone git repository
+      shell: GIT_SSH_COMMAND='ssh -i /home/cognet/.ssh/id_rsa_github -o hostname=ssh.github.com -o port=443 -o ProxyCommand="/usr/bin/corkscrew {{proxy_host}} {{proxy_port}} %h %p" -o StrictHostKeyChecking=no' git clone git@github.com:CogNet-5GPPP/demos_public.git -b demos_public_Agnostic_Cloud_CI /home/cognet/repo2/
+      when: not(http_proxy is none)
+
+    ## [Marouane Mechteri]: clone demos_public repository
+    - name: clone git repository
+      shell: GIT_SSH_COMMAND='ssh -i /home/cognet/.ssh/id_rsa_github -o hostname=ssh.github.com -o StrictHostKeyChecking=no' git clone git@github.com:CogNet-5GPPP/demos_public.git /home/cognet/repo2/
+      when: http_proxy is none
+
+    - name: copy hosts file
+      shell: tail -11 /etc/hosts > /home/cognet/repo2/hosts
+
+
+    #- name: add changed file to repository
+    #  command: cd /home/cognet/repo
+
+    - name: prepare user name
+      command: git config user.name autocognet
+      args:
+        chdir: /home/cognet/repo2/
+
+    - name: prepare user email
+      command: git config user.email autocognet@cognet.com
+      args:
+        chdir: /home/cognet/repo2/
+
+    - name: add changed file to repository
+      command: git add /home/cognet/repo2/hosts
+      args:
+        chdir: /home/cognet/repo2/
+
+    - name: commit hosts files
+      ignore_errors: yes
+      command: git commit -m "updated hosts files"
+      args:
+        chdir: /home/cognet/repo2/
+
+
+    # [Marouane Mechteri]: push changes to demos_public_Agnostic_Cloud_CI
+    - name: push files
+      ignore_errors: yes
+      shell: GIT_SSH_COMMAND='ssh -i /home/cognet/.ssh/id_rsa_github -o hostname=ssh.github.com -o port=443 -o ProxyCommand="/usr/bin/corkscrew {{proxy_host}} {{proxy_port}} %h %p" -o StrictHostKeyChecking=no' git push origin demos_public_Agnostic_Cloud_CI
+      args:
+        chdir: /home/cognet/repo2/
+      when: not(http_proxy is none)
+
+    # [Marouane Mechteri]: push changes to demos_public
+    - name: push files
+      ignore_errors: yes
+      shell: GIT_SSH_COMMAND='ssh -i /home/cognet/.ssh/id_rsa_github -o hostname=ssh.github.com -o StrictHostKeyChecking=no' git push origin master
+      args:
+        chdir: /home/cognet/repo2/
+      when: http_proxy is none
+
+
+    - name: remove temporal folder
+      file:
+        state: absent
+        path: /home/cognet/repo2/

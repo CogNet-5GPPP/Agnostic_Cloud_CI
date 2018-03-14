@@ -1,0 +1,6 @@
+host github.com
+    user git
+    hostname ssh.github.com
+    port 443
+    IdentityFile /home/cognet/.ssh/id_rsa_github
+    StrictHostKeyChecking no

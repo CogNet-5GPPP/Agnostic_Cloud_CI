@@ -1,0 +1,174 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Download golang
+  get_url:
+    url: "https://storage.googleapis.com/golang/go{{ go_version }}.linux-amd64.tar.gz"
+    dest: "/root/go{{ go_version }}.linux-amd64.tar.gz"
+    mode: 0440
+  tags:
+    - monasca-golang-download
+    - monasca-install-grafana
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Download golang
+  get_url:
+    url: "https://storage.googleapis.com/golang/go{{ go_version }}.linux-amd64.tar.gz"
+    dest: "/root/go{{ go_version }}.linux-amd64.tar.gz"
+    mode: 0440
+  tags:
+    - monasca-golang-download
+    - monasca-install-grafana
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+- name: Unarchive golang
+  unarchive:
+    src: "/root/go{{ go_version }}.linux-amd64.tar.gz"
+    dest: "/usr/local"
+    creates: "/usr/local/go"
+    copy: "no"
+  tags:
+    - monasca-golang-unarchive
+    - monasca-install-grafana
+
+- name: Clone grafana git repositories
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    version: "{{ item.version }}"
+    force: "yes"
+  with_items:
+    - repo: "{{ grafana_datasource_git_repo }}"
+      dest: "/var/lib/grafana/plugins"
+      version: "{{ grafana_datasource_git_branch }}"
+    - repo: "{{ grafana_git_repo }}"
+      dest: "/opt/cloned-repos/grafana"
+      version: "{{ grafana_git_branch }}"
+  tags:
+    - monasca-grafana-clone-repos
+    - monasca-install-grafana
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+
+- name: Clone grafana git repositories
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    version: "{{ item.version }}"
+    force: "yes"
+  with_items:
+    - repo: "{{ grafana_datasource_git_repo }}"
+      dest: "/var/lib/grafana/plugins"
+      version: "{{ grafana_datasource_git_branch }}"
+    - repo: "{{ grafana_git_repo }}"
+      dest: "/opt/cloned-repos/grafana"
+      version: "{{ grafana_git_branch }}"
+  tags:
+    - monasca-grafana-clone-repos
+    - monasca-install-grafana
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+  
+- name: Copy grafana install script
+  template:
+    src: "grafana/install_grafana.sh.j2"
+    dest: "/opt/grafana-build/install_grafana.sh"
+    mode: "0750"
+  register: grafana_script
+  tags:
+    - monasca-grafana-script
+    - monasca-install-grafana
+
+- name: Install grafana
+  command: "./install_grafana.sh"
+  args:
+    chdir: "/opt/grafana-build"
+  when: grafana_script.changed
+  tags:
+    - monasca-install-grafana
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+
+- name: Install grafana
+  command: "./install_grafana.sh"
+  args:
+    chdir: "/opt/grafana-build"
+  when: grafana_script.changed
+  tags:
+    - monasca-install-grafana
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+  
+- name: Drop grafana Config(s)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode|default('0644') }}"
+  with_items:
+    - src: "grafana/grafana-server.service.j2"
+      dest: "/etc/systemd/system/grafana-server.service"
+      owner: "root"
+      group: "root"
+      mode: "0644"
+    - src: "grafana/grafana.ini.j2"
+      dest: "/etc/grafana/grafana.ini"
+      owner: "root"
+      group: "root"
+  register: grafana_config
+  tags:
+    - monasca-grafana-config
+    - monasca-install-grafana
+
+- name: Ensure grafana launches on boot
+  service:
+    name: "grafana-server"
+    enabled: "yes"
+  tags:
+    - monasca-grafana-boot
+
+- name: Restart grafana
+  service:
+    name: "grafana-server"
+    state: "restarted"
+  when: grafana_config.changed
+  tags:
+    - monasca-grafana-restart
+    - monasca-install-grafana

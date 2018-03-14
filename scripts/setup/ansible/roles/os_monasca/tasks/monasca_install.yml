@@ -1,0 +1,71 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- include: monasca_install_apt.yml
+  when:
+    - ansible_pkg_mgr == 'apt'
+  tags:
+    - monasca-install
+    - monasca-apt-packages
+
+- include: update_maven.yml
+  tags:
+    - monasca-update-maven
+
+- name: Set pip_install_options_fact 
+  set_fact:
+    pip_install_options_fact: "{{ pip_install_options|default('') }}"
+  tags:
+    - monasca-install
+    - monasca-pip-packages
+
+- name: Install pip required packages
+  pip:
+    name: "{{ item }}"
+    state: present 
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: monasca_required_pip_packages
+  tags:
+    - monasca-install
+    - monasca-pip-packages
+
+- name: Create the monasca virtualenv
+  command: virtualenv /opt/venvs/monasca-{{ monasca_venv_tag }}
+  args:
+    creates: /opt/venvs/monasca-{{ monasca_venv_tag }}
+  tags:
+    - monasca-install
+    - monasca-create-venv
+
+- name: Install pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    state: present
+    virtualenv: "{{ monasca_venv_bin | dirname }}"
+    virtualenv_site_packages: "no"
+    extra_args: "{{ pip_install_options_fact }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: monasca_pip_packages
+  when:
+    - monasca_venv_enabled | bool
+  tags:
+    - monasca-install
+    - monasca-pip-packages

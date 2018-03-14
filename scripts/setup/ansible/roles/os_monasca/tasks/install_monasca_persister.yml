@@ -1,0 +1,161 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Install monasca-persister required pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    virtualenv: "/opt/venvs/monasca-persister"
+  with_items:
+    - "influxdb==2.8.0"
+    - "six>=1.10.0"
+    - "file://{{ monasca_common_tarball.stdout }}"
+  tags:
+    - monasca-persister-pip-packages
+    - monasca-install-persister
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Install monasca-persister required pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    virtualenv: "/opt/venvs/monasca-persister"
+  with_items:
+    - "influxdb==2.8.0"
+    - "six>=1.10.0"
+    - "file://{{ monasca_common_tarball.stdout }}"
+  tags:
+    - monasca-persister-pip-packages
+    - monasca-install-persister
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+  
+- name: Create monasca-persister tarball
+  command: "/opt/venvs/monasca-persister/bin/python setup.py sdist"
+  args:
+    chdir: "/opt/cloned-repos/monasca-persister"
+  register: tarball_result
+  changed_when: "tarball_result.rc == 0"
+  tags:
+    - monasca-persister-tarball
+    - monasca-install-persister
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+- name: Create monasca-persister tarball
+  command: "/opt/venvs/monasca-persister/bin/python setup.py sdist"
+  args:
+    chdir: "/opt/cloned-repos/monasca-persister"
+  register: tarball_result
+  changed_when: "tarball_result.rc == 0"
+  tags:
+    - monasca-persister-tarball
+    - monasca-install-persister
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+
+- name: Get tarball file name
+  shell: "ls -td /opt/cloned-repos/monasca-persister/dist/monasca-persister-*.tar.gz | head -1"
+  register: tarball
+  changed_when: false
+  tags:
+    - monasca-persister-install
+    - monasca-install-persister
+
+- name: Install monasca-persister
+  pip:
+    name: "file://{{ tarball.stdout }}"
+    virtualenv: "/opt/venvs/monasca-persister"
+  tags:
+    - monasca-persister-install
+    - monasca-install-persister
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Install monasca-persister
+  pip:
+    name: "file://{{ tarball.stdout }}"
+    virtualenv: "/opt/venvs/monasca-persister"
+  tags:
+    - monasca-persister-install
+    - monasca-install-persister
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+
+
+- name: Drop monasca-persister Config(s)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - src: "monasca-persister/monasca-persister.service.j2"
+      dest: "/etc/systemd/system/monasca-persister.service"
+      owner: "root"
+      group: "root"
+      mode: "0644"
+    - src: "monasca-persister/persister.conf.j2"
+      dest: "/etc/monasca/persister.conf"
+      owner: "mon-persister"
+      group: "monasca"
+      mode: "0640"
+    - src: "monasca-persister/persister-config.yml.j2"
+      dest: "/etc/monasca/persister-config.yml"
+      owner: "mon-persister"
+      group: "monasca"
+      mode: "0640"
+    - src: "monasca-persister/persister-logging.conf.j2"
+      dest: "/etc/monasca/persister-logging.conf"
+      owner: "mon-persister"
+      group: "monasca"
+      mode: "0640"
+  tags:
+    - monasca-persister-config
+    - monasca-install-persister
+
+- name: Ensure monasca-persister launches on boot
+  service:
+    name: "monasca-persister"
+    enabled: "yes"
+  tags:
+    - monasca-persister-boot
+
+- name: Restart monasca-persister
+  service:
+    name: "monasca-persister"
+    state: "restarted"
+  tags:
+    - monasca-persister-restart
+    - monasca-install-persister

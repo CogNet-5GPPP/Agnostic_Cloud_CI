@@ -1,0 +1,120 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Get schemas
+  get_url:
+    url: "https://raw.githubusercontent.com/openstack/monasca-api/{{ monasca_git_branch }}/devstack/files/schema/{{ item.schema }}"
+    dest: "/opt/sqls/{{ item.schema }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - schema: "influxdb_setup.py"
+      mode: "0750"
+    - schema: "mon_mysql.sql"
+      mode: "0644"
+  register: schemas
+  tags:
+    - monasca-schema-download
+    - monasca-install-schema
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Get schemas
+  get_url:
+    url: "https://raw.githubusercontent.com/openstack/monasca-api/{{ monasca_git_branch }}/devstack/files/schema/{{ item.schema }}"
+    dest: "/opt/sqls/{{ item.schema }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - schema: "influxdb_setup.py"
+      mode: "0750"
+    - schema: "mon_mysql.sql"
+      mode: "0644"
+  register: schemas
+  tags:
+    - monasca-schema-download
+    - monasca-install-schema
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: http_proxy is none
+  
+  
+- name: Setup influxdb schema
+  command: "/opt/sqls/influxdb_setup.py"
+  when: schemas.changed
+  tags:
+    - monasca-influxdb-schema
+    - monasca-install-schema
+
+- name: Ensure mon database exists
+  mysql_db:
+    name: "mon"
+    state: "present"
+  notify: Import mon database
+  tags:
+    - monasca-mysql-dbcreate
+    - monasca-install-schema
+
+- name: Ensure database users
+  mysql_user:
+    name: "{{ item[0] }}"
+    password: "password"
+    priv: "mon.*:ALL"
+    host: "{{ item[1] }}"
+  with_nested:
+    - ['notification', 'monapi', 'thresh']
+    - ['%', 'localhost', '{{ ansible_hostname }}']
+  tags:
+    - monasca-mysql-users
+    - monasca-install-schema
+
+- name: Create kafka topics logs dir
+  file:
+    path: "/opt/kafka/logs"
+    state: directory
+    owner: "kafka"
+    group: "kafka"
+    mode: "0766"
+  register: kafka_topics
+  tags:
+    - monasca-kafka-topics
+    - monasca-install-schema
+
+- name: Create kafka topics
+  command: "/opt/kafka/bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions {{ item.partitions }} --topic {{ item.topic }}"
+  with_items:
+    - topic: "metrics"
+      partitions: "64"
+    - topic: "events"
+      partitions: "12"
+    - topic: "alarm-state-transitions"
+      partitions: "12"
+    - topic: "alarm-notifications"
+      partitions: "12"
+    - topic: "retry-notifications"
+      partitions: "3"
+    - topic: "60-seconds-notifications"
+      partitions: "3"
+  when: kafka_topics.changed
+  tags:
+    - monasca-kafka-topics
+    - monasca-install-schema
+
+- meta: flush_handlers

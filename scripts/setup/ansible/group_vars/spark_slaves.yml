@@ -1,0 +1,13 @@
+---
+
+spark_folder_name: "spark-1.6.3-bin-hadoop2.6"
+
+spark_link: "http://www.eu.apache.org/dist/spark/spark-1.6.3/"
+spark_zip_file_name: "spark-1.6.3-bin-hadoop2.6.tgz"
+hadoop_link: "http://www-eu.apache.org/dist/hadoop/common/hadoop-2.6.4/"
+hadoop_zip_file_name: "hadoop-2.6.4.tar.gz"
+hive_link: "http://www-eu.apache.org/dist/hive/hive-2.0.1/"
+hive_zip_file_name: "apache-hive-2.0.1-bin.tar.gz"
+derby_link: "http://archive.apache.org/dist/db/derby/db-derby-10.10.2.0/"
+derby_zip_file_name: "db-derby-10.10.2.0-bin.tar.gz"
+

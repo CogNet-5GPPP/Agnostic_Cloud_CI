@@ -1,0 +1,32 @@
+---
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: Add Oracle Java Repository
+  sudo: yes
+  apt_repository: repo='ppa:webupd8team/java'
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+    
+- name: Add Oracle Java Repository
+  sudo: yes
+  apt_repository: repo='ppa:webupd8team/java'
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+- name: Accept Java 6 License
+  sudo: yes
+  debconf: name='oracle-java6-installer' question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+
+- name: Install Oracle Java 6
+  sudo: yes
+  apt: name={{item}} state=latest
+  with_items:
+    - oracle-java6-installer
+    - ca-certificates
+    - oracle-java6-set-default
+

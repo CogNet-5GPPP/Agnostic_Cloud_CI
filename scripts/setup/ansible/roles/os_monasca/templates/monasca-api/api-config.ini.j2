@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+
+[DEFAULT]
+name = monasca_api
+
+[pipeline:main]
+pipeline = request_id auth api
+
+[app:api]
+paste.app_factory = monasca_api.api.server:launch
+
+[filter:auth]
+paste.filter_factory = keystonemiddleware.auth_token:filter_factory
+
+[filter:request_id]
+paste.filter_factory = oslo_middleware.request_id:RequestId.factory
+
+[server:main]
+use = egg:gunicorn#main
+host = {{ ansible_default_ipv4.address }}
+port = 8070
+workers = 1
+proc_name = monasca_api

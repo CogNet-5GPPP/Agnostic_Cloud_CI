@@ -1,0 +1,8 @@
+---
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+## [Marouane Mechteri]: updating openstack branch
+#branch: stable/mitaka
+#branch: stable/newton
+branch: stable/ocata

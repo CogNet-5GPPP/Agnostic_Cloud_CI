@@ -1,0 +1,90 @@
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+- name: copy reflecting docker
+  hosts: docker
+  remote_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+
+  - name: copy reflecting docker
+    copy: src=files/reflector.zip dest=/home/cognet/reflector.zip
+
+  - name: unarchive reflecting docker
+    unarchive: src=files/reflector.zip dest=/home/cognet/
+
+
+  ## [Marouane Mechteri]:
+  # Add proxy in docker file and create an empty requirements file
+  - name: copy requirements.txt file
+    shell: mv /home/cognet/reflector/requirements.txt /home/cognet/reflector/requirements2.txt
+    when: not(http_proxy is none)
+  - name: Create empty requirements.txt file
+    file: path=/home/cognet/reflector/requirements.txt state=touch
+    when: not(http_proxy is none)
+  - name: run requirements
+    lineinfile:
+      dest=/home/cognet/reflector/Dockerfile
+      line='RUN pip --proxy {{http_proxy}} install -r requirements2.txt'
+      insertafter="^#?FROM"
+    when: not(http_proxy is none)
+  - name: add ENV proxy for http
+    lineinfile:
+      dest=/home/cognet/reflector/Dockerfile
+      line='ENV http_proxy {{http_proxy}}'
+      insertafter="^#?FROM"
+    when: not(http_proxy is none)
+  - name: add ENV proxy for https
+    lineinfile:
+      dest=/home/cognet/reflector/Dockerfile
+      line='ENV https_proxy {{https_proxy}}'
+      insertafter="^#?FROM"
+    when: not(http_proxy is none)
+
+
+- name: Build an image with the docker_image module
+  hosts: docker
+  remote_user: "{{ansible_user}}"
+  become: yes
+  vars_files:
+    - "group_vars/docker.yml"
+  tasks:
+
+    - name: python dependencies
+      pip: name={{item}} version=1.9.0
+      with_items:
+
+      - docker-py
+      ## [Marouane Mechteri]: adding proxy and condition
+      when: not(http_proxy is none)
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ https_proxy }}"
+        no_proxy: "{{ ansible_default_ipv4.address }}"
+        
+    - name: python dependencies
+      pip: name={{item}} version=1.9.0
+      with_items:
+
+      - docker-py
+      ## [Marouane Mechteri]: adding condition
+      when: http_proxy is none
+
+    ## [Marouane Mechteri]:
+    # change api_version to docker_api_version
+    - name: build the image
+      docker_image: >
+        name=reflector
+        tag=first
+        path=/home/cognet/reflector
+        state=present
+        docker_api_version=1.18
+
+- name: run docker image
+  hosts: docker
+  remote_user: "{{ansible_user}}"
+  become: yes
+  tasks:
+    
+    - name: run_docker
+      shell: /usr/bin/docker run -i --add-host monasca:`cat /etc/hosts | grep monasca | awk '{print $1}'` --add-host kafka:`cat /etc/hosts | grep kafka | awk '{print $1}'` --add-host spark_master:`cat /etc/hosts | grep spark_master | awk '{print $1}'` --add-host spark_slaves1:`cat /etc/hosts | grep spark_slaves1 | awk '{print $1}'` --add-host spark_slaves2:`cat /etc/hosts | grep spark_slaves2 | awk '{print $1}'` --add-host oscon:`cat /etc/hosts | grep oscon | awk '{print $1}'` --add-host odl:`cat /etc/hosts | grep odl | awk '{print $1}'` --add-host docker:`cat /etc/hosts | grep docker | awk '{print $1}' > /tmp/lastline ; tail -n1 </tmp/lastline`  reflector:first &

@@ -1,0 +1,91 @@
+---
+# Copyright 2016 LSD/UFCG
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+## [Marouane Mechteri]
+- name: add proxy in maven file
+  lineinfile:
+    dest=/etc/maven/settings.xml
+    insertafter="<proxies>"
+    line="<proxy>
+        <active>true</active>
+        <protocol>{{proxy_protocol}}</protocol>
+        <host>{{proxy_host}}</host>
+        <port>{{proxy_port}}</port>
+        </proxy>"
+  when: not(http_proxy is none)
+
+- name: Setup monasca-common
+  command: "mvn clean install -DskipTests"
+  args:
+    chdir: "/opt/cloned-repos/monasca-common"
+  register: common_result
+  changed_when: "common_result.rc == 0"
+  tags:
+    - monasca-install-libraries
+
+- name: Create monasca libraries tarball
+  command: "/opt/venvs/monasca-api/bin/python setup.py sdist"
+  args:
+    chdir: "/opt/cloned-repos/monasca-{{ item }}"
+  with_items:
+    - "common"
+    - "statsd"
+  register: result
+  changed_when: "result.rc == 0"
+  tags:
+    - monasca-libraries-tarball
+    - monasca-install-libraries
+  ## [Marouane Mechteri]: adding proxy and condition
+  when: not(http_proxy is none)
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+    no_proxy: "{{ ansible_default_ipv4.address }}"
+
+
+- name: Create monasca libraries tarball
+  command: "/opt/venvs/monasca-api/bin/python setup.py sdist"
+  args:
+    chdir: "/opt/cloned-repos/monasca-{{ item }}"
+  with_items:
+    - "common"
+    - "statsd"
+  register: result
+  changed_when: "result.rc == 0"
+  tags:
+    - monasca-libraries-tarball
+    - monasca-install-libraries
+  ## [Marouane Mechteri]: adding condition
+  when: http_proxy is none
+
+
+- name: Get monasca-common tarball file name
+  shell: "ls -td /opt/cloned-repos/monasca-common/dist/monasca-common*.tar.gz | head -1"
+  register: monasca_common_tarball
+  changed_when: false
+  tags:
+    - monasca-common-install
+    - monasca-install-libraries
+
+- name: Get monasca-statsd tarball file name
+  shell: "ls -td /opt/cloned-repos/monasca-statsd/dist/monasca-statsd*.tar.gz | head -1"
+  register: monasca_statsd_tarball
+  changed_when: false
+  tags:
+    - monasca-statsd-install
+    - monasca-install-libraries

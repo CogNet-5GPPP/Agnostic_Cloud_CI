@@ -1,0 +1,47 @@
+# Modified work Copyright 2017 Marouane Mechteri
+# Author: Marouane Mechteri (marouane.mechteri@orange.com), Orange
+
+########### playbook to install hadoop, hive and spark in master and slaves ########
+- name: spark installation playbook
+  hosts: spark_master, spark_slaves
+  remote_user: "{{ansible_user}}"
+  sudo: yes
+    
+  tasks:
+
+  ####### unzipping all  compressed file into /usr/local directory####
+  - name: unarchiving the spark zip file
+    unarchive: src=../spark.tgz dest=./ copy=yes mode=0777
+  
+  - name: remove spark directory if exists
+    file: name=/usr/local/spark state=absent
+
+  - name: rename directory
+    command: creates="/usr/local/spark" mv ./{{spark_folder_name}} /usr/local/spark
+    
+  ############## enviroment variable for spark #####################
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export SPARK_HOME=/usr/local/spark'  line='export SPARK_HOME=/usr/local/spark '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export SCALA_HOME=/usr/share/java/scala'  line='export SCALA_HOME=/usr/share/java/scala '
+  - lineinfile: dest=/home/{{ ansible_ssh_user }}/.bashrc regexp='export PATH=$SCALA_HOME/:$PATH'  line='export PATH=$SCALA_HOME/:$PATH '
+  
+  ############## sourcing bashrc #####################
+  - name: source bashrc
+    sudo: no
+    shell: . /home/{{ ansible_ssh_user }}/.bashrc && source /home/{{ ansible_ssh_user }}/.bashrc
+    args:
+      executable: /bin/bash
+     
+  ######################################################
+  - name: retrieve the hostname of the target machine
+    shell: hostname
+    register: target_hostname
+
+  - name: retrieve the ip address ot the target machine
+    shell: hostname -I
+    register: target_ip
+
+  - name: updating etc hosts file variable
+    sudo_user: root
+    sudo: yes
+    lineinfile: dest=/etc/hosts regexp='{{target_ip.stdout}} {{target_hostname.stdout}}'  line='{{target_ip.stdout}} {{target_hostname.stdout}}' 
+     
