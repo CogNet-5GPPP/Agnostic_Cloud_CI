@@ -510,6 +510,10 @@ This job ensure the cleaning and the removal of all the CogNet VMs from the clou
 ![source code step](images/remove1.png)
 ![source code step](images/remove2.png)
 
+# Authors
+
+- Marouane Mechteri (marouane.mechteri@orange.com)
+
 
 # License
 
